@@ -9,7 +9,6 @@ import {
   type NodeInfoResult,
   type ListChannelsResult,
   type ListPeersResult,
-  ChannelState,
 } from '@fiber-pay/sdk/browser';
 import { addressToScript } from '@nervosnetwork/ckb-sdk-utils';
 

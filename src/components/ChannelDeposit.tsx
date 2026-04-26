@@ -24,7 +24,7 @@ const PRESET_AMOUNTS = [
 
 const ChannelDeposit: React.FC<ChannelDepositProps> = ({
   fiberNode,
-  routerPubkey = import.meta.env.VITE_ROUTER_PUBKEY || '0x03a14ea2a93b52fafa23edc29a2b90a1319e328665a5636163a18a0eea6588e2af',
+  routerPubkey = process.env.NEXT_PUBLIC_ROUTER_PUBKEY || '0x03a14ea2a93b52fafa23edc29a2b90a1319e328665a5636163a18a0eea6588e2af',
 }) => {
   const { isOpening, error, openChannel } = useChannelManager();
   const [selectedAmount, setSelectedAmount] = useState<bigint | null>(null);

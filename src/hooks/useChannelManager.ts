@@ -5,7 +5,7 @@ import type { FiberBrowserNode } from '@fiber-pay/sdk/browser';
 
 // Router WebSocket address - must match the bootnode multiaddr in App.tsx
 // Format: /ip4/IP/tcp/PORT/ws/p2p/PUBKEY
-const ROUTER_WS_ADDRESS = import.meta.env.VITE_ROUTER_WS_ADDRESS || '/ip4/127.0.0.1/tcp/8231/ws/p2p/03a14ea2a93b52fafa23edc29a2b90a1319e328665a5636163a18a0eea6588e2af';
+const ROUTER_WS_ADDRESS = process.env.NEXT_PUBLIC_ROUTER_WS_ADDRESS || '/ip4/127.0.0.1/tcp/8231/ws/p2p/03a14ea2a93b52fafa23edc29a2b90a1319e328665a5636163a18a0eea6588e2af';
 
 export interface ChannelManagerResult {
   isOpening: boolean;
