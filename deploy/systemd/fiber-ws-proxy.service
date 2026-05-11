@@ -1,0 +1,18 @@
+[Unit]
+Description=Fiber WebSocket-to-TCP Proxy (websocat)
+After=network-online.target fiber-router.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+# Loopback only; Caddy terminates TLS on :8231 and proxies here.
+ExecStart=/usr/local/bin/websocat --binary ws-listen:127.0.0.1:18231 tcp:127.0.0.1:8228
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=fiber-ws-proxy
+
+[Install]
+WantedBy=multi-user.target

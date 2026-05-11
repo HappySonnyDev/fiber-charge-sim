@@ -376,17 +376,6 @@ export function useFiberNode(
     setOnChainBalance('0');
   }, []);
 
-  // Auto-connect when passkey is configured
-  useEffect(() => {
-    if (passkeyConfigured && !isConnected && !isConnecting && passkeySupported) {
-      console.log('Auto-connecting Fiber node...');
-      const timer = setTimeout(() => {
-        connect();
-      }, 500);
-      return () => clearTimeout(timer);
-    }
-  }, [passkeyConfigured, isConnected, isConnecting, passkeySupported, connect]);
-
   // Cleanup on unmount
   useEffect(() => {
     return () => {

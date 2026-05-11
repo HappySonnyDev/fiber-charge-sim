@@ -36,8 +36,8 @@ export const STATIONS: Station[] = [
   { id: 3, name: 'EVgo Fast Charge', brand: 'EVgo', x: 82, y: 70, rate: 1.44, power: 100, available: false },
   // EA: 1.44 × 350 × 5/3600 = 0.700 CKB/5s
   { id: 4, name: 'Electrify America', brand: 'EA', x: 50, y: 78, rate: 1.44, power: 350, available: true },
-  // Blink: 1.44 × 50 × 5/3600 = 0.100 CKB/5s
-  { id: 5, name: 'Blink Charging', brand: 'Blink', x: 62, y: 42, rate: 1.44, power: 50, available: true },
+  // Blink: 暂无配套 Fiber 节点，前端隐藏
+  // { id: 5, name: 'Blink Charging', brand: 'Blink', x: 62, y: 42, rate: 1.44, power: 50, available: true },
 ];
 
 export const ROUTER_NODE: RouterNode = { id: 'router', name: 'Fiber Hub', x: 50, y: 45, liquidity: 50000 };

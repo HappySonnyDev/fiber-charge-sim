@@ -1,0 +1,32 @@
+# Caddyfile for Fiber Charge Sim
+#
+# Required env (export before running caddy, or set via setup.sh):
+#   FCS_DOMAIN  e.g.  1-2-3-4.sslip.io
+#   FCS_EMAIL   e.g.  you@example.com   (used for Let's Encrypt account)
+#
+# Caddy will obtain certs automatically and renew them.
+
+{
+	email {$FCS_EMAIL}
+}
+
+# ---- Web (Next.js) on 443 -------------------------------------------------
+{$FCS_DOMAIN} {
+	encode gzip zstd
+
+	# WASM + SharedArrayBuffer requires these (already set by next.config.ts,
+	# but enforcing here as well so static assets / errors also carry them).
+	header {
+		Cross-Origin-Opener-Policy "same-origin"
+		Cross-Origin-Embedder-Policy "require-corp"
+	}
+
+	reverse_proxy 127.0.0.1:3000
+}
+
+# ---- WebSocket (wss) on 8231 → websocat (loopback 18231) ------------------
+# Multiaddr to use in frontend env:
+#   /dns4/{$FCS_DOMAIN}/tcp/8231/wss/p2p/<ROUTER_PUBKEY>
+{$FCS_DOMAIN}:8231 {
+	reverse_proxy 127.0.0.1:18231
+}

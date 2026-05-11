@@ -1,0 +1,21 @@
+[Unit]
+Description=Fiber Router Node
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/fiber-charge-sim/fiber-nodes
+EnvironmentFile=/opt/fiber-charge-sim/fiber-nodes/.env
+ExecStart=/opt/fiber-charge-sim/fiber-nodes/start-router.sh
+Restart=on-failure
+RestartSec=5
+KillSignal=SIGINT
+TimeoutStopSec=30
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=fiber-router
+
+[Install]
+WantedBy=multi-user.target

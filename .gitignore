@@ -24,3 +24,7 @@ logs/
 fiber-nodes/data/
 fiber-nodes/keys/
 fiber-nodes/ckb/
+
+# Deployment scripts — MUST stay tracked
+!deploy/
+!deploy/**

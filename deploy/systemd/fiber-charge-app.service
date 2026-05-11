@@ -1,0 +1,22 @@
+[Unit]
+Description=Fiber Charge Sim - Next.js App
+After=network-online.target fiber-router.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/fiber-charge-sim
+EnvironmentFile=/opt/fiber-charge-sim/.env
+Environment=NODE_ENV=production
+Environment=PORT=3000
+Environment=HOSTNAME=127.0.0.1
+ExecStart=/usr/bin/npm start
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=fiber-charge-app
+
+[Install]
+WantedBy=multi-user.target
