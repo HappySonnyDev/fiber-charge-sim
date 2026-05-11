@@ -5,7 +5,12 @@ import type { FiberBrowserNode } from '@fiber-pay/sdk/browser';
 
 // Router WebSocket address - must match the bootnode multiaddr in App.tsx
 // Format: /ip4/IP/tcp/PORT/ws/p2p/PUBKEY
-const ROUTER_WS_ADDRESS = process.env.NEXT_PUBLIC_ROUTER_WS_ADDRESS || '/ip4/127.0.0.1/tcp/8231/ws/p2p/03a14ea2a93b52fafa23edc29a2b90a1319e328665a5636163a18a0eea6588e2af';
+// NOTE: connect_peer RPC requires address WITHOUT /p2p/ part, pubkey passed separately
+const ROUTER_WS_MULTIADDR = process.env.NEXT_PUBLIC_ROUTER_WS_ADDRESS || '/ip4/127.0.0.1/tcp/8231/ws/p2p/03a14ea2a93b52fafa23edc29a2b90a1319e328665a5636163a18a0eea6588e2af';
+
+const ROUTER_PUBKEY_MATCH = ROUTER_WS_MULTIADDR.match(/p2p\/([a-f0-9]+)$/i);
+const ROUTER_PUBKEY = ROUTER_PUBKEY_MATCH ? (`0x${ROUTER_PUBKEY_MATCH[1]}` as `0x${string}`) : null;
+const ROUTER_WS_ADDRESS = ROUTER_WS_MULTIADDR.replace(/\/p2p\/[a-f0-9]+$/i, '');
 
 export interface ChannelManagerResult {
   isOpening: boolean;
@@ -35,6 +40,7 @@ export function useChannelManager(): ChannelManagerResult {
       try {
         await node.connectPeer({
           address: ROUTER_WS_ADDRESS,
+          pubkey: ROUTER_PUBKEY || undefined,
         });
         console.log('Connected to router peer');
       } catch (connectErr) {
@@ -66,11 +72,20 @@ export function useChannelManager(): ChannelManagerResult {
   }, []);
 
   const closeChannel = useCallback(async (
-    _node: FiberBrowserNode,
-    _channelId: string
+    node: FiberBrowserNode,
+    channelId: string
   ) => {
-    // TODO: Implement close channel when SDK supports it
-    console.log('Close channel not yet implemented in SDK');
+    try {
+      console.log('Shutting down channel:', channelId);
+      await node.shutdownChannel({
+        channel_id: channelId as `0x${string}`,
+      });
+      console.log('Channel shutdown initiated:', channelId);
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : 'Failed to close channel';
+      setError(errorMsg);
+      throw err;
+    }
   }, []);
 
   const sendPayment = useCallback(async (

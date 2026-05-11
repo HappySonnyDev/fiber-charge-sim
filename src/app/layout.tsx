@@ -6,6 +6,11 @@ export const metadata: Metadata = {
   description: 'Fiber Charge Simulator with multi-hop payment demo',
 }
 
+export const viewport = {
+  width: 'device-width',
+  initialScale: 1,
+}
+
 export default function RootLayout({
   children,
 }: {

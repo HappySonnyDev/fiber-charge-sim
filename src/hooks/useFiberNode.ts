@@ -15,6 +15,11 @@ import { addressToScript } from '@nervosnetwork/ckb-sdk-utils';
 // CKB RPC for querying on-chain balance
 const CKB_TESTNET_RPC = 'https://testnet.ckbapp.dev/';
 
+// Extract router pubkey from env for channel settlement
+const _ROUTER_WS_MULTIADDR = process.env.NEXT_PUBLIC_ROUTER_WS_ADDRESS || '/ip4/127.0.0.1/tcp/8231/ws/p2p/03a14ea2a93b52fafa23edc29a2b90a1319e328665a5636163a18a0eea6588e2af';
+const _ROUTER_PUBKEY_MATCH = _ROUTER_WS_MULTIADDR.match(/p2p\/([a-f0-9]+)$/i);
+const ROUTER_PUBKEY_FOR_SETTLE: string | null = _ROUTER_PUBKEY_MATCH ? `0x${_ROUTER_PUBKEY_MATCH[1]}` : null;
+
 
 
 async function queryCkbBalance(address: string): Promise<bigint> {
@@ -67,6 +72,7 @@ export interface UseFiberNodeResult {
   connect: () => Promise<void>;
   disconnect: () => void;
   refresh: () => Promise<void>;
+  settleRouterChannels: () => Promise<number>;
   // Browser passkey mode diagnostics
   passkeySupported: boolean | null;
   passkeyConfigured: boolean;
@@ -279,9 +285,13 @@ export function useFiberNode(
           const match = bootnodeMultiaddr.match(/p2p\/([a-f0-9]+)$/i);
           if (match) {
             const routerPubkey = `0x${match[1]}`;
+            // Address must NOT contain /p2p/ part; pubkey is passed separately
+            const routerAddress = bootnodeMultiaddr.replace(/\/p2p\/[a-f0-9]+$/i, '');
             console.log('Router pubkey:', routerPubkey);
+            console.log('Router address:', routerAddress);
             await node.connectPeer({
-              address: bootnodeMultiaddr,
+              address: routerAddress,
+              pubkey: routerPubkey as `0x${string}`,
             });
             console.log('Connected to router peer successfully');
           }
@@ -304,6 +314,52 @@ export function useFiberNode(
       setIsConnecting(false);
     }
   }, [bootnodeMultiaddr, isConnecting, isConnected, refresh]);
+
+  // Close all channels between current user and Router
+  const settleRouterChannels = useCallback(async (): Promise<number> => {
+    if (!browserNodeRef.current) throw new Error('Node not connected');
+    const node = browserNodeRef.current;
+
+    // Normalize router pubkey: strip 0x prefix for comparison
+    const routerPubkeyNorm = ROUTER_PUBKEY_FOR_SETTLE
+      ? ROUTER_PUBKEY_FOR_SETTLE.replace(/^0x/i, '').toLowerCase()
+      : null;
+
+    if (!routerPubkeyNorm) throw new Error('Router pubkey not configured');
+
+    // Fetch fresh channel list directly from node
+    const { channels: freshChannels } = await node.listChannels();
+
+    console.log('[Settle] Router pubkey (normalized):', routerPubkeyNorm);
+    console.log('[Settle] All channels:', freshChannels.map((ch) => ({
+      id: ch.channel_id,
+      pubkey: ch.pubkey,
+      state: ch.state.state_name,
+    })));
+
+    // Find channels whose peer is the Router (handle both 0x-prefixed and plain)
+    const routerChannels = freshChannels.filter((ch) => {
+      const peerPubkey = ch.pubkey?.replace(/^0x/i, '').toLowerCase();
+      return peerPubkey && peerPubkey === routerPubkeyNorm;
+    });
+
+    console.log('[Settle] Matched router channels:', routerChannels.length);
+
+    if (routerChannels.length === 0) {
+      throw new Error(`No active channels with Router found (router pubkey: ${routerPubkeyNorm}, channels: ${freshChannels.length})`);
+    }
+
+    let closed = 0;
+    for (const ch of routerChannels) {
+      const channelId = (ch as { channel_id: string }).channel_id;
+      console.log('Settling router channel:', channelId);
+      await node.shutdownChannel({
+        channel_id: channelId as `0x${string}`,
+      });
+      closed++;
+    }
+    return closed;
+  }, []);  // No deps needed: uses browserNodeRef directly
 
   const disconnect = useCallback(() => {
     if (browserNodeRef.current) {
@@ -348,6 +404,7 @@ export function useFiberNode(
     connect,
     disconnect,
     refresh,
+    settleRouterChannels,
     passkeySupported,
     passkeyConfigured,
     browserNodeState,

@@ -126,14 +126,17 @@ curl -X POST http://127.0.0.1:8233 \
 在项目根目录创建 `.env.local` 文件：
 
 ```env
-# Router 节点的 Multiaddr (用于浏览器节点连接)
-VITE_FIBER_BOOTNODE=/ip4/ROUTER_IP/tcp/8228/p2p/ROUTER_PEER_ID
+# Router 节点的 WebSocket Multiaddr (用于浏览器节点连接)
+NEXT_PUBLIC_ROUTER_WS_ADDRESS=/ip4/127.0.0.1/tcp/8231/ws/p2p/ROUTER_PUBKEY
+
+# Router Pubkey
+NEXT_PUBLIC_ROUTER_PUBKEY=0xROUTER_PUBKEY
 
 # 车商节点 Pubkeys
-VITE_STATION_1_PUBKEY=0xTESLA_PUBKEY
-VITE_STATION_2_PUBKEY=0xNIO_PUBKEY
-VITE_STATION_3_PUBKEY=0xXPENG_PUBKEY
-VITE_STATION_4_PUBKEY=0xEA_PUBKEY
+NEXT_PUBLIC_TESLA_PUBKEY=0xTESLA_PUBKEY
+NEXT_PUBLIC_NIO_PUBKEY=0xNIO_PUBKEY
+NEXT_PUBLIC_XPENG_PUBKEY=0xXPENG_PUBKEY
+NEXT_PUBLIC_EA_PUBKEY=0xEA_PUBKEY
 ```
 
 ## 5. 建立通道 (Channels)
@@ -190,14 +193,33 @@ curl -X POST http://127.0.0.1:8227 \
    - 访问 https://faucet.nervos.org/
    - 输入地址获取测试 CKB
 
-## 7. 启动前端应用
+## 7. 启动 WebSocket 代理（浏览器节点必需）
+
+浏览器中的 WASM Fiber 节点只能通过 WebSocket 进行 P2P 连接，因此需要启动 `websocat` 代理将 WebSocket 端口转发到 Router 的 TCP P2P 端口：
+
+```bash
+cd fiber-nodes
+bash start-ws-proxy.sh
+```
+
+此代理默认将 `ws://127.0.0.1:8231` 转发到 Router 的 `/ip4/127.0.0.1/tcp/8228`。
+
+**必须同时运行的服务清单**：
+| 服务 | 脚本/命令 | 端口 |
+|------|----------|------|
+| Router 节点 | `start-router.sh` | RPC 8227 / P2P 8228 |
+| 车商节点 | `start-stations.sh` | 各节点 P2P 端口 |
+| WebSocket 代理 | `start-ws-proxy.sh` | WS 8231 |
+| 前端应用 | `npm run dev` | 3000 |
+
+## 8. 启动前端应用
 
 ```bash
 cd /Users/sonny/.qoderwork/workspace/mnzptdlhi7mi3jky/fiber-charge-sim
 npm run dev
 ```
 
-访问 http://localhost:5173，点击 "CONNECT FIBER NODE" 按钮连接你的浏览器节点。
+访问 http://localhost:3000，点击 "CONNECT FIBER NODE" 按钮连接你的浏览器节点。
 
 ## 故障排除
 
@@ -213,3 +235,23 @@ npm run dev
 - 确保使用现代浏览器（Chrome/Edge/Firefox）
 - 检查是否支持 WebAuthn/Passkey
 - 查看浏览器控制台错误信息
+
+### 预充值报错 "feature not found, waiting for peer to send init message"
+**原因**：WebSocket 代理未运行，浏览器 WASM 节点无法与 Router 完成 P2P 握手。
+**解决**：
+1. 检查端口 8231 是否在监听：`lsof -i :8231`
+2. 启动代理：`cd fiber-nodes && bash start-ws-proxy.sh`
+3. 刷新前端页面，重新连接 Fiber 节点后再尝试预充值
+
+### 本地 RPC 调用返回 503 Service Unavailable
+**原因**：系统设置了 `http_proxy` / `https_proxy` 环境变量（如 `http_proxy=http://127.0.0.1:1087`），导致 `fnn-cli` 等本地 RPC 客户端将 `127.0.0.1` 请求错误转发到代理服务器。
+**解决**：
+```bash
+# 临时取消代理
+unset http_proxy https_proxy HTTP_PROXY HTTPS_PROXY
+
+# 或使用 curl 直接绕过代理调用
+ curl -x "" -X POST http://127.0.0.1:8227 \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","method":"node_info","params":[],"id":1}'
+```

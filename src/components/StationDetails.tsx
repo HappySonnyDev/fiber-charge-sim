@@ -52,6 +52,12 @@ const StationDetails: React.FC<StationDetailsProps> = ({
           <span className="font-mono text-amber-400">{selectedStation.rate} CKB/kWh</span>
         </div>
         <div className="flex items-center justify-between">
+          <span className="text-gray-400">Per Payment</span>
+          <span className="font-mono text-green-400">
+            {(selectedStation.rate * selectedStation.power * 5 / 3600).toFixed(4)} CKB / 5s
+          </span>
+        </div>
+        <div className="flex items-center justify-between">
           <span className="text-gray-400">Status</span>
           <span
             className={`font-mono ${
@@ -73,7 +79,7 @@ const StationDetails: React.FC<StationDetailsProps> = ({
             <div className="text-green-400 font-mono">{selectedStation.brand}</div>
           </div>
           <p className="text-xs text-gray-500 mt-3 text-center">
-            Multi-hop: 2 hops • Fee: 0.1%
+            Multi-hop: 2 hops
           </p>
         </div>
 

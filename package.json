@@ -15,19 +15,23 @@
     "@fiber-pay/sdk": "^0.2.3",
     "@nervosnetwork/ckb-sdk-utils": "^0.109.5",
     "@nervosnetwork/fiber-js": "^0.8.1",
+    "better-sqlite3": "^12.9.0",
     "framer-motion": "^12.38.0",
     "lucide-react": "^1.8.0",
     "react": "^19.2.5",
-    "react-dom": "^19.2.5"
+    "react-dom": "^19.2.5",
+    "uuid": "^14.0.0"
   },
   "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^25.6.0",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
+    "@types/uuid": "^10.0.0",
     "autoprefixer": "^10.5.0",
+    "next": "^15.3.1",
     "postcss": "^8.5.10",
     "tailwindcss": "^3.4.19",
-    "typescript": "^6.0.3",
-    "next": "^15.3.1"
+    "typescript": "^6.0.3"
   }
 }

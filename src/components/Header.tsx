@@ -3,7 +3,7 @@ import { Zap } from './Icons';
 
 const Header: React.FC = () => {
   return (
-    <header className="relative z-10 px-8 py-6 border-b border-cyan-500/20">
+    <header className="relative z-10 px-8 pt-7 pb-5 border-b border-cyan-500/20">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
           <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center glow-cyan">

@@ -7,15 +7,13 @@ import NetworkMap from '../components/NetworkMap';
 import VehicleStatus from '../components/VehicleStatus';
 import StationDetails from '../components/StationDetails';
 import SessionStats from '../components/SessionStats';
-import WalletBalance from '../components/WalletBalance';
 import TransactionLog from '../components/TransactionLog';
 import FiberConnectionPanel from '../components/FiberConnectionPanel';
 import ChannelDeposit from '../components/ChannelDeposit';
 import { STATIONS } from '../data/stations';
 import type { Station } from '../data/stations';
 import { useFiberNode } from '../hooks/useFiberNode';
-import { StreamingPayment } from '../lib/streaming-payment';
-import type { SendPaymentResult } from '@fiber-pay/sdk/browser';
+import { InvoicePayment } from '../lib/invoice-payment';
 
 interface Particle {
   id: number;
@@ -53,11 +51,11 @@ export default function HomePage() {
   const [sessionStats, setSessionStats] = useState<SessionStatsData>({ duration: 0, totalPaid: 0, txCount: 0 });
   const [particles, setParticles] = useState<Particle[]>([]);
   const [logs, setLogs] = useState<Log[]>([]);
-  const [, setFiberPayments] = useState<SendPaymentResult[]>([]);
+  const [, setFiberPayments] = useState<{ payment_hash: string }[]>([]);
 
   // Fiber node hook
   const fiberNode = useFiberNode(BOOTNODE_MULTIADDR, 'Fiber Charge User');
-  const streamingPaymentRef = useRef<StreamingPayment | null>(null);
+  const invoicePaymentRef = useRef<InvoicePayment | null>(null);
 
   // SharedArrayBuffer check
   useEffect(() => {
@@ -95,10 +93,9 @@ export default function HomePage() {
 
     const interval = setInterval(() => {
       setBatteryLevel(prev => Math.min(prev + 0.5, 100));
-      const paymentAmount = selectedStation.rate / 3600;
       setSessionStats(prev => ({
         duration: prev.duration + 1,
-        totalPaid: prev.totalPaid + paymentAmount,
+        totalPaid: prev.totalPaid,
         txCount: prev.txCount
       }));
       const particleId = Date.now();
@@ -128,67 +125,84 @@ export default function HomePage() {
     setIsCharging(true);
     setSessionStats({ duration: 0, totalPaid: 0, txCount: 0 });
     addLog(`Connected to ${selectedStation.name}`);
-    addLog('Initializing Fiber streaming payment...');
+    addLog('Initializing invoice-based payment...');
 
     try {
       if (!fiberNode.browserNodeRef.current) {
         throw new Error('Browser node not initialized');
       }
 
-      const streamingPayment = new StreamingPayment({
+      // Step 1: Get interval amount from server config
+      let amountPerIntervalCkb = 0.5; // fallback
+      let intervalMs = 5000;
+      try {
+        const configRes = await fetch('/api/charging/config', { cache: 'no-store' });
+        if (configRes.ok) {
+          const configData = await configRes.json();
+          if (configData.amount_per_interval) amountPerIntervalCkb = configData.amount_per_interval;
+          if (configData.interval_ms) intervalMs = configData.interval_ms;
+        }
+      } catch { /* use fallback */ }
+
+      const invoicePayment = new InvoicePayment({
         node: fiberNode.browserNodeRef.current,
-        recipientPubkey: stationPubkey as `0x${string}`,
-        amountPerInterval: BigInt(1000000),
-        intervalMs: 5000,
-        onPaymentSent: (result: SendPaymentResult) => {
-          setFiberPayments(prev => [...prev, result]);
-          addLog(`✓ Fiber payment: ${result.payment_hash.slice(0, 16)}... (${(Number(1000000) / 100000000).toFixed(6)} CKB)`);
+        stationId: selectedStation.id,
+        userPubkey: fiberNode.nodeInfo?.pubkey || 'unknown',
+        amountPerIntervalCkb,
+        intervalMs,
+        onPaymentSent: (result) => {
+          setFiberPayments(prev => [...prev, { payment_hash: result.paymentHash }]);
+          addLog(`✓ Invoice paid: ${result.paymentHash.slice(0, 16)}... (${(Number(result.amount) / 100000000).toFixed(6)} CKB)`);
           setSessionStats(prev => ({
             ...prev,
-            txCount: prev.txCount + 1
+            txCount: prev.txCount + 1,
+            totalPaid: prev.totalPaid + (Number(result.amount + result.fee) / 100000000)
           }));
           fiberNode.refresh();
         },
         onError: (error: Error) => {
-          addLog(`Fiber payment error: ${error.message}`);
+          addLog(`Invoice payment error: ${error.message}`);
+        },
+        onLog: (message: string) => {
+          addLog(message);
         },
       });
 
-      await streamingPayment.start();
-      streamingPaymentRef.current = streamingPayment;
-      addLog('Fiber streaming payment active - 0.01 CKB every 5s');
+      await invoicePayment.start();
+      invoicePaymentRef.current = invoicePayment;
+      addLog(`Invoice payment stream active - ${amountPerIntervalCkb} CKB every ${intervalMs / 1000}s`);
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to start streaming payment';
+      const message = err instanceof Error ? err.message : 'Failed to start invoice payment';
       addLog(`Error: ${message}`);
       setIsCharging(false);
     }
   };
 
   const stopCharging = async () => {
-    if (streamingPaymentRef.current) {
+    if (invoicePaymentRef.current) {
       try {
-        await streamingPaymentRef.current.stop();
-        addLog('Fiber streaming payment stopped');
+        invoicePaymentRef.current.stop();
+        addLog('Invoice payment stream stopped');
       } catch (err) {
-        const message = err instanceof Error ? err.message : 'Failed to stop streaming payment';
+        const message = err instanceof Error ? err.message : 'Failed to stop invoice payment';
         addLog(`Error stopping payment: ${message}`);
       }
-      streamingPaymentRef.current = null;
+      invoicePaymentRef.current = null;
     }
 
     setIsCharging(false);
-    addLog('Charging stopped. Payment channel closed.');
+    addLog('Charging stopped.');
     addLog(`Session: ${sessionStats.txCount} transactions, ${sessionStats.totalPaid.toFixed(6)} CKB total`);
   };
 
   return (
-    <div className="relative min-h-screen">
+    <div className="relative h-screen flex flex-col overflow-hidden">
       <div className="grid-bg" />
 
       <Header />
 
-      <main className="relative z-10 p-6 grid grid-cols-12 gap-6 h-[calc(100vh-100px)]">
-        <div className="col-span-7 glass-panel p-6 relative overflow-hidden">
+      <main className="relative z-10 p-6 flex gap-6 flex-1 min-h-0 overflow-hidden">
+        <div className="flex-[7] min-w-0 glass-panel p-6 relative overflow-hidden">
           <div className="scan-line" />
           <h2 className="font-display text-lg text-cyan-400 mb-4 flex items-center gap-2">
             CHARGING NETWORK MAP
@@ -202,7 +216,7 @@ export default function HomePage() {
           />
         </div>
 
-        <div className="col-span-5 flex flex-col gap-4">
+        <div className="flex-[5] min-w-0 flex flex-col gap-4 overflow-y-auto">
           <FiberConnectionPanel fiberNode={fiberNode} />
 
           <VehicleStatus batteryLevel={batteryLevel} />
@@ -217,8 +231,6 @@ export default function HomePage() {
           />
 
           <SessionStats isCharging={isCharging} sessionStats={sessionStats} />
-
-          <WalletBalance userBalance={fiberNode.onChainBalance} isConnected={fiberNode.isConnected} />
 
           <ChannelDeposit fiberNode={fiberNode} />
 

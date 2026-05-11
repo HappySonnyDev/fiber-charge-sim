@@ -30,6 +30,7 @@ const FiberConnectionPanel: React.FC<FiberConnectionPanelProps> = ({ fiberNode }
     error,
     connect,
     disconnect,
+    settleRouterChannels,
     passkeySupported,
     passkeyConfigured,
     browserNodeState,
@@ -39,6 +40,9 @@ const FiberConnectionPanel: React.FC<FiberConnectionPanelProps> = ({ fiberNode }
   } = fiberNode;
 
   const [isExpanded, setIsExpanded] = useState(false);
+  const [isSettling, setIsSettling] = useState(false);
+  const [settleError, setSettleError] = useState<string | null>(null);
+  const [settleSuccess, setSettleSuccess] = useState<string | null>(null);
 
   const getStatusColor = () => {
     if (isConnecting) return 'bg-amber-400';
@@ -256,12 +260,52 @@ const FiberConnectionPanel: React.FC<FiberConnectionPanelProps> = ({ fiberNode }
                   {isConnecting ? 'STARTING NODE...' : 'CONNECT FIBER NODE'}
                 </button>
               ) : (
-                <button
-                  onClick={disconnect}
-                  className="w-full py-3 rounded-lg font-display font-bold text-xs tracking-wider transition-all bg-red-500/10 border border-red-500/40 text-red-400 hover:bg-red-500/20"
-                >
-                  DISCONNECT
-                </button>
+                <div className="space-y-2">
+                  {/* Settle Button */}
+                  <button
+                    onClick={async () => {
+                      setIsSettling(true);
+                      setSettleError(null);
+                      setSettleSuccess(null);
+                      try {
+                        const count = await settleRouterChannels();
+                        setSettleSuccess(`已提交结算请求，共关闭 ${count} 个通道，等待上链确认`);
+                      } catch (err) {
+                        setSettleError(err instanceof Error ? err.message : '结算失败');
+                      } finally {
+                        setIsSettling(false);
+                      }
+                    }}
+                    disabled={isSettling}
+                    className={`w-full py-3 rounded-lg font-display font-bold text-xs tracking-wider transition-all ${
+                      isSettling
+                        ? 'bg-gray-800 border border-gray-600 text-gray-500 cursor-not-allowed'
+                        : 'bg-amber-500/20 border border-amber-400 text-amber-400 hover:bg-amber-500/30'
+                    }`}
+                  >
+                    {isSettling ? 'SETTLING...' : 'SETTLE & CLOSE CHANNEL'}
+                  </button>
+
+                  {/* Settle feedback */}
+                  {settleSuccess && (
+                    <div className="bg-green-900/20 rounded-lg p-2 border border-green-500/30">
+                      <p className="text-[10px] font-mono text-green-400">{settleSuccess}</p>
+                    </div>
+                  )}
+                  {settleError && (
+                    <div className="bg-red-900/20 rounded-lg p-2 border border-red-500/30">
+                      <p className="text-[10px] font-mono text-red-400">{settleError}</p>
+                    </div>
+                  )}
+
+                  {/* Disconnect Button */}
+                  <button
+                    onClick={disconnect}
+                    className="w-full py-3 rounded-lg font-display font-bold text-xs tracking-wider transition-all bg-red-500/10 border border-red-500/40 text-red-400 hover:bg-red-500/20"
+                  >
+                    DISCONNECT
+                  </button>
+                </div>
               )}
 
               {/* Info text */}

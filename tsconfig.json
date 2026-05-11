@@ -1,6 +1,7 @@
 {
   "compilerOptions": {
     "target": "ES2020",
+    "ignoreDeprecations": "6.0",
     "useDefineForClassFields": true,
     "lib": [
       "ES2020",
@@ -22,6 +23,9 @@
     "allowJs": true,
     "incremental": true,
     "esModuleInterop": true,
+    "paths": {
+      "@/*": ["./src/*"]
+    },
     "plugins": [
       {
         "name": "next"

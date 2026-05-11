@@ -19,6 +19,10 @@ ROUTER_RPC="http://127.0.0.1:8227"
 # Channel capacity (200 CKB = 20000000000 shannon)
 CHANNEL_CAPACITY="20000000000"
 
+# Routing fee proportional millionths (100000 = 10%, 50000 = 5%, 1000 = 0.1%)
+# This fee is charged by Router for forwarding TLCs through this channel
+ROUTING_FEE_PROPORTIONAL_MILLIONTHS="100000"
+
 echo "======================================"
 echo "Setting up Fiber Channels"
 echo "======================================"
@@ -52,10 +56,11 @@ open_channel() {
     sleep 2
     
     # Open channel using fnn-cli
-    echo "Opening channel..."
+    echo "Opening channel with routing fee ${ROUTING_FEE_PROPORTIONAL_MILLIONTHS} millionths..."
     $FNN_BIN -u "$ROUTER_RPC" channel open_channel \
         --pubkey "$station_pubkey" \
         --funding-amount "$CHANNEL_CAPACITY" \
+        --tlc-fee-proportional-millionths "$ROUTING_FEE_PROPORTIONAL_MILLIONTHS" \
         2>&1 && echo "Channel opened successfully!" || echo "Failed to open channel (may need to wait for funding)"
 }
 

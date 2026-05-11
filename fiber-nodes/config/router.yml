@@ -10,6 +10,8 @@ fiber:
   # Router is the bootstrap node
   bootnode_addrs: []
   chain: testnet
+  # Routing fee: 10% (100000 millionths)
+  tlc_fee_proportional_millionths: 100000
   scripts:
     - name: FundingLock
       script:
