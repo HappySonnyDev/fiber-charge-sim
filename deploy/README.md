@@ -69,60 +69,65 @@ bash /opt/fiber-charge-sim/deploy/setup.sh 54.180.28.237 you@example.com
 - `npm ci && npm run build`
 - enable 所有服务（不会立刻 start）
 
-## 5. 启动节点 + 开通道（首次部署）
+## 5. 一键启动＆开通道＆填配置
 
 ```bash
-# Router 必须先起
-systemctl start fiber-router
-sleep 5
-
-# 4 个 Station
-systemctl start fiber-station@tesla fiber-station@nio fiber-station@xpeng fiber-station@ea
-sleep 5
-
-# WS 代理
-systemctl start fiber-ws-proxy
-
-# 一次性：开通道（耗时 ~1 分钟，等通道上链）
-cd /opt/fiber-charge-sim/fiber-nodes
-./setup-channels.sh
+bash /opt/fiber-charge-sim/deploy/bootstrap.sh
 ```
 
-## 6. 把 Router pubkey 和通道 outpoint 填回 .env
+这一条命令会按顺序完成：
 
-```bash
-# Router pubkey
-./fiber-nodes/fnn-cli -u http://127.0.0.1:8227 info | grep pubkey
+1. 启动 Router，等 RPC 就绪
+2. 启动 4 个 Station，等各自 RPC 就绪
+3. 启动 WebSocket 代理
+4. 自动提取 Router / Station pubkey
+5. 检查通道；不够 4 条就调 `setup-channels.sh`，最多等 2 分钟
+6. 自动 `sed` 替换 `/opt/fiber-charge-sim/.env` 里的 `__ROUTER_PUBKEY__` 和 4 个 `STATION_N_CHANNEL_OUTPOINT`
+7. 重启 `fiber-charge-app`
 
-# 通道 outpoint
-./fiber-nodes/fnn-cli -u http://127.0.0.1:8227 list_channels '[{}]'
-```
+脚本是幂等的——中途失败（比如通道资金没上链）可以直接重跑。
 
-把得到的值填进 `/opt/fiber-charge-sim/.env` 里：
-
-```
-NEXT_PUBLIC_ROUTER_PUBKEY=0x<router pubkey>
-NEXT_PUBLIC_ROUTER_WS_ADDRESS=/dns4/<域名>/tcp/8231/wss/p2p/<router pubkey 不带 0x>
-ROUTER_PUBKEY=<router pubkey 不带 0x>
-STATION_1_CHANNEL_OUTPOINT=0x...
-STATION_2_CHANNEL_OUTPOINT=0x...
-STATION_3_CHANNEL_OUTPOINT=0x...
-STATION_4_CHANNEL_OUTPOINT=0x...
-```
-
-## 7. 启动前端
-
-```bash
-systemctl start fiber-charge-app
-```
-
-打开浏览器访问：
+跑完会打印：
 
 ```
-https://<你的VPS-IP用横杠>.sslip.io
+Open:  https://54-180-28-237.sslip.io
 ```
 
 第一次打开 Caddy 会去 Let's Encrypt 签证书，可能要 5–15 秒。
+
+### 如果想手动拆开执行
+
+<details>
+<summary>展开看逐步命令</summary>
+
+```bash
+# 5.1 启动 Fiber 节点
+systemctl start fiber-router
+sleep 5
+systemctl start fiber-station@tesla fiber-station@nio fiber-station@xpeng fiber-station@ea
+sleep 5
+systemctl start fiber-ws-proxy
+
+# 5.2 首次部署：开通道
+cd /opt/fiber-charge-sim/fiber-nodes
+./setup-channels.sh
+
+# 5.3 取 Router pubkey
+./fnn-cli -u http://127.0.0.1:8227 info
+
+# 5.4 取通道 outpoints
+./fnn-cli -u http://127.0.0.1:8227 channel list_channels '[{}]'
+
+# 5.5 手动编辑 /opt/fiber-charge-sim/.env，替换：
+#     __ROUTER_PUBKEY__   → 实际 pubkey（不带 0x）
+#     STATION_N_CHANNEL_OUTPOINT=0x…
+
+# 5.6 启动前端
+systemctl start fiber-charge-app
+```
+
+</details>
+
 
 ---
 
