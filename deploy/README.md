@@ -38,19 +38,96 @@ bash /opt/fiber-charge-sim/deploy/install.sh
 
 会装：Node.js 20、build-essential（编译 better-sqlite3 用）、Caddy、websocat、ufw 防火墙规则。
 
-## 3. 准备私钥
+## 3. 准备私钥 + 通道数据
 
-编辑 `fiber-nodes/.env`，填好 5 个节点的私钥（从你本机的 `.env` 复制过来即可）：
+两条路径，二选一：
+
+### 路径 A：迁移本机已有通道（省 CKB，带历史数据）
+
+本机已经开过通道、里面还有资金，直接搬过来继续用。
+
+**本机 Mac 执行：**
 
 ```bash
-ROUTER_PRIVATE_KEY=...
-TESLA_PRIVATE_KEY=...
-NIO_PRIVATE_KEY=...
-XPENG_PRIVATE_KEY=...
-EA_PRIVATE_KEY=...
+cd <本机项目目录>
+
+# 先停本机 fnn，避免 RocksDB 复制时损坏
+pkill -INT fnn || true
+sleep 3
+
+tar czf /tmp/fiber-migration.tgz \
+    fiber-nodes/.env \
+    fiber-nodes/keys/ \
+    fiber-nodes/data/
+
+scp /tmp/fiber-migration.tgz root@<VPS-IP>:/tmp/
 ```
 
-> 如果你想**搬旧通道**过来，把本机 `fiber-nodes/data/` 整个 rsync 过去（关闭本机 fnn 后再传，避免 RocksDB 损坏）。否则会在第 5 步重新开通道。
+**VPS 执行：**
+
+```bash
+cd /opt/fiber-charge-sim
+tar xzf /tmp/fiber-migration.tgz -C ./
+```
+
+搬完后第 5 步 `bootstrap.sh` 会检测到 4 条通道已存在，**跳过开通道**直接走后续。
+
+### 路径 B：在 VPS 重新开通道（账户干净，需要 CKB）
+
+只带私钥文件，不带通道状态。首次启动节点会自动初始化一个空的 RocksDB，由 `setup-channels.sh` 重开 4 条新通道。
+
+**本机 Mac 执行：**
+
+```bash
+cd <本机项目目录>
+
+# 只打包私钥 + .env
+tar czf /tmp/fiber-keys.tgz \
+    fiber-nodes/.env \
+    fiber-nodes/keys/
+
+scp /tmp/fiber-keys.tgz root@<VPS-IP>:/tmp/
+```
+
+**VPS 执行：**
+
+```bash
+cd /opt/fiber-charge-sim
+tar xzf /tmp/fiber-keys.tgz -C ./
+ls fiber-nodes/keys/   # 应看到 router_key / tesla_key / nio_key / xpeng_key / ea_key
+```
+
+**开通道前必须先确认有 CKB：**每个节点开一条 200 CKB 的通道，建议准备 ≥250 CKB 冗余。
+
+因为私钥是从本机带过来的，**地址跟本机一样** —— 本机账户里的 CKB 已经在链上，直接能用；如果余额不够就去 https://faucet.nervos.org/ 领水。
+
+先把节点起来查余额（bootstrap 晚点再跑）：
+
+```bash
+systemctl start fiber-router fiber-ws-proxy
+sleep 5
+systemctl start fiber-station@tesla fiber-station@nio fiber-station@xpeng fiber-station@ea
+sleep 5
+
+cd /opt/fiber-charge-sim/fiber-nodes
+./fnn-cli -u http://127.0.0.1:8227 info   # Router
+./fnn-cli -u http://127.0.0.1:8237 info   # Tesla
+./fnn-cli -u http://127.0.0.1:8247 info   # Nio
+./fnn-cli -u http://127.0.0.1:8257 info   # Xpeng
+./fnn-cli -u http://127.0.0.1:8267 info   # EA
+```
+
+确认每个节点余额充足后继续第 4 / 5 步。第 5 步的 `bootstrap.sh` 会检测到 0 条通道，自动调 `setup-channels.sh`。
+
+### 路径对比
+
+| 项目 | 路径 A（迁移） | 路径 B（重开） |
+|---|---|---|
+| 备份 `data/` | ✅ | ❌ |
+| 备份 `keys/` | ✅ | ✅ |
+| 通道状态 | 沿用本机 | 从零开 |
+| 需要 CKB 余额 | 不需要 | **每节点 ≥250 CKB** |
+| SQLite 历史 session | 跟着迁 | 全新空库 |
 
 ## 4. 安装 systemd 单元 + 构建前端
 
