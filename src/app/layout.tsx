@@ -1,5 +1,27 @@
 import type { Metadata } from 'next'
+import { Orbitron, IBM_Plex_Mono, Rajdhani } from 'next/font/google'
 import './globals.css'
+
+const orbitron = Orbitron({
+  subsets: ['latin'],
+  weight: ['400', '500', '600', '700', '800', '900'],
+  variable: '--font-orbitron',
+  display: 'swap',
+})
+
+const ibmPlexMono = IBM_Plex_Mono({
+  subsets: ['latin'],
+  weight: ['300', '400', '500', '600'],
+  variable: '--font-ibm-plex-mono',
+  display: 'swap',
+})
+
+const rajdhani = Rajdhani({
+  subsets: ['latin'],
+  weight: ['300', '400', '500', '600', '700'],
+  variable: '--font-rajdhani',
+  display: 'swap',
+})
 
 export const metadata: Metadata = {
   title: 'Fiber Charge Simulator - Multi-Hop Payment Demo',
@@ -17,15 +39,7 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en">
-      <head>
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        <link
-          href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;800;900&family=IBM+Plex+Mono:wght@300;400;500;600&family=Rajdhani:wght@300;400;500;600;700&display=swap"
-          rel="stylesheet"
-        />
-      </head>
+    <html lang="en" className={`${orbitron.variable} ${ibmPlexMono.variable} ${rajdhani.variable}`}>
       <body>{children}</body>
     </html>
   )

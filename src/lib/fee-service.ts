@@ -1,4 +1,3 @@
-import { CONFIG } from './config';
 
 /**
  * Calculate the amount breakdown for a payment.

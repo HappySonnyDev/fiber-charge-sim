@@ -10,7 +10,7 @@ export async function POST(
   try {
     const { id } = await params;
     const body = await request.json();
-    const { preimage, payment_hash, routing_fee_ckb } = body;
+    const { preimage, payment_hash } = body;
 
     if (!preimage || !payment_hash) {
       return NextResponse.json(

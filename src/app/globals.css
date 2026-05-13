@@ -18,13 +18,13 @@
 body {
   background: var(--dark-bg);
   color: #e0e0e0;
-  font-family: 'Rajdhani', sans-serif;
+  font-family: var(--font-rajdhani), sans-serif;
   overflow: hidden;
   min-height: 100vh;
 }
 
-.font-display { font-family: 'Orbitron', sans-serif; }
-.font-mono { font-family: 'IBM Plex Mono', monospace; }
+.font-display { font-family: var(--font-orbitron), sans-serif; }
+.font-mono { font-family: var(--font-ibm-plex-mono), monospace; }
 
 .grid-bg {
   position: fixed;

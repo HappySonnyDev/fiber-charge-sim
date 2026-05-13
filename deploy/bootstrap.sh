@@ -53,7 +53,7 @@ wait_rpc() {
 
 extract_pubkey() {
     # Return the first 0x-prefixed 66-hex field from fnn-cli info output.
-    "$CLI" -u "$1" info 2>/dev/null | grep -oE '0x[a-f0-9]{66}' | head -1
+    "$CLI" -u "$1" info 2>/dev/null | grep -oE '[a-f0-9]{66}' | head -1
 }
 
 # ============================================================
@@ -111,8 +111,8 @@ done
 # ============================================================
 echo ">>> [5/7] Checking channels..."
 channel_count() {
-    "$CLI" -u "$ROUTER_RPC" channel list_channels '[{}]' 2>/dev/null \
-        | grep -c '"channel_outpoint"' || true
+    "$CLI" -u "$ROUTER_RPC" channel list_channels --output-format json 2>/dev/null \
+        | grep -c 'channel_outpoint:' || true
 }
 
 CUR=$(channel_count)
@@ -139,7 +139,7 @@ fi
 # ============================================================
 echo ">>> [6/7] Writing pubkey + outpoints into $ENV_FILE..."
 
-CHANNELS_JSON=$("$CLI" -u "$ROUTER_RPC" channel list_channels '[{}]' 2>/dev/null || echo '{}')
+CHANNELS_JSON=$("$CLI" -u "$ROUTER_RPC" channel list_channels --output-format json 2>/dev/null || echo '{}')
 
 get_outpoint_for_peer() {
     # $1 = station pubkey (with or without 0x)
@@ -162,7 +162,7 @@ def channels(d):
     return []
 
 for ch in channels(data):
-    peer = str(ch.get('peer_id') or ch.get('peer_pubkey') or '').lower()
+    peer = str(ch.get('pubkey') or ch.get('peer_id') or ch.get('peer_pubkey') or '').lower()
     if pk in peer:
         print(ch.get('channel_outpoint', ''))
         break
