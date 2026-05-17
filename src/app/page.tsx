@@ -4,15 +4,14 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
 import NetworkMap from '../components/NetworkMap';
-import VehicleStatus from '../components/VehicleStatus';
 import StationDetails from '../components/StationDetails';
 import SessionStats from '../components/SessionStats';
 import TransactionLog from '../components/TransactionLog';
-import FiberConnectionPanel from '../components/FiberConnectionPanel';
-import ChannelDeposit from '../components/ChannelDeposit';
-import { STATIONS } from '../data/stations';
+import OpenChannelModal from '../components/OpenChannelModal';
+import { STATIONS, BATTERY_CAPACITY_KWH, CHARGE_DEMO_SPEEDUP } from '../data/stations';
 import type { Station } from '../data/stations';
 import { useFiberNode } from '../hooks/useFiberNode';
+import { useChannelOpening } from '../hooks/useChannelOpening';
 import { InvoicePayment } from '../lib/invoice-payment';
 
 interface Particle {
@@ -43,19 +42,47 @@ const STATION_PUBKEYS: Record<number, string> = {
   4: process.env.NEXT_PUBLIC_STATION_4_PUBKEY || '0x02c0f31ab51e5b9cc11e3335e5080b93e16bf63f4eb43e3bcbca665804c7fb7030', // EA
 };
 
+// 默认选中的车站 ID（Tesla）
+const DEFAULT_STATION_ID = 1;
+
 export default function HomePage() {
-  const [selectedStation, setSelectedStation] = useState<Station | null>(null);
+  const [selectedStation, setSelectedStation] = useState<Station | null>(
+    () => STATIONS.find(s => s.id === DEFAULT_STATION_ID) ?? null
+  );
   const [isCharging, setIsCharging] = useState<boolean>(false);
   const [batteryLevel, setBatteryLevel] = useState<number>(23);
-  const [stationBalance, setStationBalance] = useState<Record<number, number>>({});
   const [sessionStats, setSessionStats] = useState<SessionStatsData>({ duration: 0, totalPaid: 0, txCount: 0 });
   const [particles, setParticles] = useState<Particle[]>([]);
   const [logs, setLogs] = useState<Log[]>([]);
   const [, setFiberPayments] = useState<{ payment_hash: string }[]>([]);
+  // 每次链下支付的金额（CKB），从 /api/charging/config 拉取后填入；用于网络图上粒子的金额标签
+  const [amountPerPaymentCkb, setAmountPerPaymentCkb] = useState<number>(0.5);
 
   // Fiber node hook
   const fiberNode = useFiberNode(BOOTNODE_MULTIADDR, 'Fiber Charge User');
+  const channelOpening = useChannelOpening(fiberNode.channels, fiberNode.browserNodeRef);
+  const [isOpenChannelModalVisible, setIsOpenChannelModalVisible] = useState(false);
   const invoicePaymentRef = useRef<InvoicePayment | null>(null);
+
+  const openChannelModal = useCallback(() => setIsOpenChannelModalVisible(true), []);
+  const closeChannelModal = useCallback(() => setIsOpenChannelModalVisible(false), []);
+
+  // 通道变 ready 后自动弹出 Modal（让用户清楚可以使用了），只触发一次
+  const lastReadyShown = useRef<string | null>(null);
+  useEffect(() => {
+    const p = channelOpening.pending;
+    if (!p) return;
+    if (p.step === 'ready' && lastReadyShown.current !== `${p.startedAt}`) {
+      lastReadyShown.current = `${p.startedAt}`;
+      setIsOpenChannelModalVisible(true);
+    }
+  }, [channelOpening.pending]);
+
+  // 推导可用通道余额（number）以供 StationDetails 低余额提示。
+  // fiberNode.availableBalance 格式如 "12.345678 CKB"
+  const channelBalanceCkb = fiberNode.isConnected
+    ? parseFloat(fiberNode.availableBalance.replace(' CKB', '')) || 0
+    : undefined;
 
   // SharedArrayBuffer check
   useEffect(() => {
@@ -65,15 +92,6 @@ export default function HomePage() {
       console.log('SharedArrayBuffer is available:', typeof SharedArrayBuffer);
     }
     console.log('crossOriginIsolated:', window.crossOriginIsolated);
-  }, []);
-
-  // Initialize station balances
-  useEffect(() => {
-    const initial: Record<number, number> = {};
-    STATIONS.forEach(s => {
-      initial[s.id] = 0;
-    });
-    setStationBalance(initial);
   }, []);
 
   // Add log helper
@@ -87,22 +105,25 @@ export default function HomePage() {
     setLogs(prev => [...prev.slice(-20), { time, message }]);
   }, []);
 
-  // Charging simulation - UI updates only (battery, particles, duration)
+  // Charging simulation - UI updates only (battery, duration)
+  // 电量增长按真实物理公式计算：
+  //   incPerSec(%) = power(kW) / 3600 / capacity(kWh) × 100 × demoSpeedup
+  // 保留不同 station 的功率差异，同时加速使演示可看。
+  // 粒子动画由真实的链下支付事件（onPaymentSent，默认每 5s 一次）触发，
+  // 而不是这里的每秒 tick，避免视觉与实际支付脱钩。
   useEffect(() => {
     if (!isCharging || !selectedStation) return;
 
+    const incPerSec =
+      (selectedStation.power / 3600 / BATTERY_CAPACITY_KWH) * 100 * CHARGE_DEMO_SPEEDUP;
+
     const interval = setInterval(() => {
-      setBatteryLevel(prev => Math.min(prev + 0.5, 100));
+      setBatteryLevel(prev => Math.min(prev + incPerSec, 100));
       setSessionStats(prev => ({
         duration: prev.duration + 1,
         totalPaid: prev.totalPaid,
         txCount: prev.txCount
       }));
-      const particleId = Date.now();
-      setParticles(prev => [...prev, { id: particleId }]);
-      setTimeout(() => {
-        setParticles(prev => prev.filter(p => p.id !== particleId));
-      }, 1500);
     }, 1000);
 
     return () => clearInterval(interval);
@@ -143,6 +164,8 @@ export default function HomePage() {
           if (configData.interval_ms) intervalMs = configData.interval_ms;
         }
       } catch { /* use fallback */ }
+      // 同步给 NetworkMap 用于显示粒子上的金额
+      setAmountPerPaymentCkb(amountPerIntervalCkb);
 
       const invoicePayment = new InvoicePayment({
         node: fiberNode.browserNodeRef.current,
@@ -158,6 +181,13 @@ export default function HomePage() {
             txCount: prev.txCount + 1,
             totalPaid: prev.totalPaid + (Number(result.amount + result.fee) / 100000000)
           }));
+          // 真实链下支付成功 -> 触发一次粒子动画（User → Hub → Station）
+          // 两段动画各 1500ms + fee 气泡渐隐 ~1400ms，留余量后清理
+          const particleId = Date.now() + Math.random();
+          setParticles(prev => [...prev, { id: particleId }]);
+          setTimeout(() => {
+            setParticles(prev => prev.filter(p => p.id !== particleId));
+          }, 3200);
           fiberNode.refresh();
         },
         onError: (error: Error) => {
@@ -199,7 +229,7 @@ export default function HomePage() {
     <div className="relative h-screen flex flex-col overflow-hidden">
       <div className="grid-bg" />
 
-      <Header />
+      <Header batteryLevel={batteryLevel} fiberNode={fiberNode} pendingChannel={channelOpening.pending} onOpenChannel={openChannelModal} />
 
       <main className="relative z-10 p-6 flex gap-6 flex-1 min-h-0 overflow-hidden">
         <div className="flex-[7] min-w-0 glass-panel p-6 relative overflow-hidden">
@@ -213,30 +243,42 @@ export default function HomePage() {
             isCharging={isCharging}
             onStationSelect={setSelectedStation}
             particles={particles}
+            amountPerPaymentCkb={amountPerPaymentCkb}
           />
         </div>
 
-        <div className="flex-[5] min-w-0 flex flex-col gap-4 overflow-y-auto">
-          <FiberConnectionPanel fiberNode={fiberNode} />
-
-          <VehicleStatus batteryLevel={batteryLevel} />
-
+        <div className="flex-[5] min-w-0 flex flex-col gap-4 min-h-0">
           <StationDetails
             selectedStation={selectedStation}
             isCharging={isCharging}
             onStartCharging={startCharging}
             onStopCharging={stopCharging}
-            stationBalance={stationBalance}
             fiberConnected={fiberNode.isConnected}
+            channelBalanceCkb={channelBalanceCkb}
+            onOpenChannel={openChannelModal}
+            hasPendingChannel={!!channelOpening.pending && channelOpening.pending.step !== 'failed' && channelOpening.pending.step !== 'ready'}
+            onConnectFiber={fiberNode.connect}
+            isFiberConnecting={fiberNode.isConnecting}
+            passkeySupported={fiberNode.passkeySupported}
           />
 
           <SessionStats isCharging={isCharging} sessionStats={sessionStats} />
 
-          <ChannelDeposit fiberNode={fiberNode} />
-
           <TransactionLog logs={logs} />
         </div>
       </main>
+
+      <OpenChannelModal
+        open={isOpenChannelModalVisible}
+        onClose={closeChannelModal}
+        onChainBalance={fiberNode.onChainBalance}
+        ckbAddress={fiberNode.ckbAddress}
+        onRefresh={fiberNode.refresh}
+        isRefreshing={fiberNode.isRefreshing}
+        pending={channelOpening.pending}
+        startOpen={channelOpening.startOpen}
+        dismiss={channelOpening.dismiss}
+      />
 
       <Footer />
     </div>

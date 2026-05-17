@@ -65,6 +65,7 @@ export type NodeConnectionMode = 'browser-passkey';
 export interface UseFiberNodeResult {
   isConnected: boolean;
   isConnecting: boolean;
+  isRefreshing: boolean;
   nodeInfo: NodeInfoResult | null;
   channels: ListChannelsResult['channels'];
   peers: ListPeersResult['peers'];
@@ -95,6 +96,7 @@ export function useFiberNode(
 ): UseFiberNodeResult {
   const [isConnected, setIsConnected] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [nodeInfo, setNodeInfo] = useState<NodeInfoResult | null>(null);
   const [channels, setChannels] = useState<ListChannelsResult['channels']>([]);
   const [peers, setPeers] = useState<ListPeersResult['peers']>([]);
@@ -178,6 +180,7 @@ export function useFiberNode(
   const refresh = useCallback(async () => {
     if (!browserNodeRef.current) return;
 
+    setIsRefreshing(true);
     try {
       const [info, chResult, peerResult] = await Promise.all([
         browserNodeRef.current.getNodeInfo(),
@@ -222,6 +225,8 @@ export function useFiberNode(
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to refresh node data');
+    } finally {
+      setIsRefreshing(false);
     }
   }, [calculateBalance]);
 
@@ -386,6 +391,7 @@ export function useFiberNode(
   return {
     isConnected,
     isConnecting,
+    isRefreshing,
     nodeInfo,
     channels,
     peers,

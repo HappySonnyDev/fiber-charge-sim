@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { UseFiberNodeResult } from '../hooks/useFiberNode';
 import type { BrowserNodeState } from '@fiber-pay/sdk/browser';
@@ -39,10 +39,16 @@ const FiberConnectionPanel: React.FC<FiberConnectionPanelProps> = ({ fiberNode }
     onChainBalance,
   } = fiberNode;
 
-  const [isExpanded, setIsExpanded] = useState(false);
+  // 默认未连接时展开，让用户一眼看到连接入口；连接后自动折叠
+  const [isExpanded, setIsExpanded] = useState(!isConnected);
   const [isSettling, setIsSettling] = useState(false);
   const [settleError, setSettleError] = useState<string | null>(null);
   const [settleSuccess, setSettleSuccess] = useState<string | null>(null);
+
+  // 连接状态切换时自动调整展开状态：连接成功折叠，断开展开
+  useEffect(() => {
+    setIsExpanded(!isConnected);
+  }, [isConnected]);
 
   const getStatusColor = () => {
     if (isConnecting) return 'bg-amber-400';
@@ -111,7 +117,8 @@ const FiberConnectionPanel: React.FC<FiberConnectionPanelProps> = ({ fiberNode }
       </div>
 
       {/* Expanded panel */}
-      <AnimatePresence>
+      {/* initial={false} 避免首次渲染时播放展开动画，未连接时直接以展开状态出现 */}
+      <AnimatePresence initial={false}>
         {isExpanded && (
           <motion.div
             initial={{ opacity: 0, height: 0 }}
@@ -198,7 +205,7 @@ const FiberConnectionPanel: React.FC<FiberConnectionPanelProps> = ({ fiberNode }
                       {availableBalance === '0.000000 CKB' && (
                         <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-3 mt-2">
                           <p className="text-[10px] text-amber-400 mb-2">
-                            Your node needs CKB testnet tokens to open channels and make payments.
+                            You can get testnet CKB from the faucet below.
                           </p>
                           <a
                             href="https://faucet.nervos.org/"

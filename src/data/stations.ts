@@ -43,3 +43,11 @@ export const STATIONS: Station[] = [
 export const ROUTER_NODE: RouterNode = { id: 'router', name: 'Fiber Hub', x: 50, y: 45, liquidity: 50000 };
 
 export const USER_NODE: UserNode = { id: 'user', name: 'You', x: 12, y: 88 };
+
+// 车辆电池容量（kWh），用于根据 station.power 计算真实充电速率
+// 按主流纯电车取 75 kWh（Tesla Model Y 长续航约 75 kWh）
+export const BATTERY_CAPACITY_KWH = 75;
+
+// 演示加速倍数：真实超充 0→100% 需 13–45 分钟，不适合在页面上看。
+// 30× 后：Tesla 约 36s、EA 约 26s、EVgo 约 90s 跑完，保留 station 间相对快慢差异。
+export const CHARGE_DEMO_SPEEDUP = 30;
